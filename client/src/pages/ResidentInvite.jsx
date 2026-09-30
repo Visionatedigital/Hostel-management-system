@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api.js';
-import { Badge, Empty, fmtDateTime, useToast } from '../components/ui.jsx';
+import { Badge, Empty, Modal, fmtDateTime, fmtUGX, useToast } from '../components/ui.jsx';
 
 export default function ResidentInvite({ user }) {
   const [invites, setInvites] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [justSent, setJustSent] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [sleepoverGuest, setSleepoverGuest] = useState(null);
   const toast = useToast();
 
   function load() {
@@ -74,7 +76,7 @@ export default function ResidentInvite({ user }) {
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Guest</th><th>Ref</th><th>Arrival</th><th>Status</th><th>Sent</th></tr>
+                <tr><th>Guest</th><th>Ref</th><th>Arrival</th><th>Status</th><th>Sleepover</th><th>Sent</th></tr>
               </thead>
               <tbody>
                 {invites.map((v) => (
@@ -83,6 +85,7 @@ export default function ResidentInvite({ user }) {
                     <td className="mono dim">{v.ref}</td>
                     <td className="mono dim">{fmtDateTime(v.expected_arrival)}</td>
                     <td><Badge value={v.status} /></td>
+                    <td>{v.sleepover_payment_id ? <span><Badge value={v.sleepover_payment_status} /> <Link to="/resident/payments" className="dim" style={{fontSize:12}}>View charge</Link></span> : ['declined','cancelled','expired','checked_out'].includes(v.status) ? '—' : <button className="btn btn-sm" onClick={() => setSleepoverGuest(v)}>Arrange sleepover</button>}</td>
                     <td className="mono dim">{fmtDateTime(v.created_at)}</td>
                   </tr>
                 ))}
@@ -91,8 +94,47 @@ export default function ResidentInvite({ user }) {
           </div>
         </div>
       )}
+      {sleepoverGuest && <SleepoverForm guest={sleepoverGuest} onClose={() => setSleepoverGuest(null)} onCreated={() => { setSleepoverGuest(null); load(); }} />}
     </div>
   );
+}
+
+function SleepoverForm({ guest, onClose, onCreated }) {
+  const toast = useToast();
+  const [rate, setRate] = useState(null);
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  });
+  const [nights, setNights] = useState(1);
+  const [method, setMethod] = useState('mtn_momo');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get('/payments/sleepovers/rate').then(setRate).catch((e) => toast(e.message, 'error')); }, []);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await api.post('/payments/sleepovers', { visitor_id: guest.id, start_date: startDate, nights: Number(nights), method });
+      toast('Sleepover charge created. Payment is pending confirmation.');
+      onCreated();
+    } catch (error) { toast(error.message, 'error'); }
+    finally { setBusy(false); }
+  }
+
+  return <Modal title={`Sleepover for ${guest.guest_name}`} onClose={onClose}>
+    <form onSubmit={submit}>
+      <p className="form-help">Choose the first night and number of nights. The charge will appear in your Payments page and in management’s ledger.</p>
+      <div className="form-row">
+        <div className="field"><label htmlFor="sleepover-start">First night</label><input id="sleepover-start" className="input" type="date" required value={startDate} onChange={e=>setStartDate(e.target.value)}/></div>
+        <div className="field"><label htmlFor="sleepover-nights">Nights</label><input id="sleepover-nights" className="input" type="number" min="1" max="14" required value={nights} onChange={e=>setNights(e.target.value)}/></div>
+      </div>
+      <div className="field"><label htmlFor="sleepover-method">How would you like to pay?</label><select id="sleepover-method" className="select" value={method} onChange={e=>setMethod(e.target.value)}><option value="mtn_momo">MTN Mobile Money</option><option value="airtel_money">Airtel Money</option><option value="card">Card</option><option value="cash">Cash at reception</option></select></div>
+      <div className="settings-policy" style={{marginBottom:14}}><strong>{rate ? fmtUGX(rate.nightly_rate * Number(nights || 0)) : 'Loading rate…'}</strong><p>{rate ? `${fmtUGX(rate.nightly_rate)} × ${nights || 0} night${Number(nights)===1?'':'s'}` : 'Checking the current nightly rate'}</p></div>
+      <p className="form-help" role="status">{method === 'cash' ? 'Pay at reception. Staff will mark the charge paid after receiving cash.' : 'Online collection is not connected yet. This creates a pending charge; no money will be taken now. Staff will confirm payment once a method is arranged.'}</p>
+      <button className="btn btn-primary" disabled={busy || !rate?.nightly_rate} style={{width:'100%'}}>{busy ? 'Creating…' : 'Create sleepover charge'}</button>
+    </form>
+  </Modal>;
 }
 
 function InviteForm({ onCancel, onSent }) {

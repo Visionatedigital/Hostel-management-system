@@ -60,7 +60,7 @@ export default function Visitors() {
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Ref</th><th>Guest</th><th>Host</th><th>Room</th><th>Status</th><th>Check-in</th><th>Actions</th></tr>
+                <tr><th>Ref</th><th>Guest</th><th>Host</th><th>Room</th><th>Status</th><th>Sleepover</th><th>Check-in</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {shown.map((v) => (
@@ -70,6 +70,7 @@ export default function Visitors() {
                     <td className="dim">{v.resident_first} {v.resident_last}</td>
                     <td className="mono dim">{v.room_name || '—'}</td>
                     <td><Badge value={v.status} /></td>
+                    <td>{v.sleepover_nights ? <span>{v.sleepover_nights} night{v.sleepover_nights===1?'':'s'} · <Badge value={v.sleepover_payment_status}/></span> : '—'}</td>
                     <td className="mono dim">{fmtDateTime(v.check_in_time)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

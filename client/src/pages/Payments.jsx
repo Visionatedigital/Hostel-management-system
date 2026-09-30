@@ -32,7 +32,7 @@ export default function Payments() {
         <div>
           <div className="eyebrow">Finance · Rent administration</div>
           <h1 className="page-title">Payments</h1>
-          <p className="page-sub">Manual and legacy payments. Stay agreement rent is tracked on the Dashboard.</p>
+          <p className="page-sub">Manual payments and guest sleepover charges. Confirm sleepover charges only after funds are received.</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Record payment</button>
       </div>
@@ -60,10 +60,10 @@ export default function Payments() {
                 {shown.map((p) => (
                   <tr key={p.id}>
                     <td style={{ fontWeight: 500 }}>{p.resident_first} {p.resident_last}</td>
-                    <td className="dim">{p.type}</td>
+                    <td className="dim">{p.sleepover_visitor_id ? 'Guest sleepover' : p.type}{p.sleepover_visitor_id && <div className="form-help" style={{margin:0}}>{p.description}</div>}</td>
                     <td className="mono">{fmtUGX(p.amount)}</td>
                     <td><Badge value={p.status} /></td>
-                    <td className="dim">{p.method ? p.method.replace('_', ' ') : '—'}</td>
+                    <td className="dim">{(p.sleepover_requested_method || p.method)?.replaceAll('_', ' ') || '—'}</td>
                     <td className="mono dim">{p.due_date || '—'}</td>
                     <td className="mono dim">{p.paid_at || '—'}</td>
                     <td>

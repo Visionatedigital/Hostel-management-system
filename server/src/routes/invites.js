@@ -24,10 +24,15 @@ const upload = multer({
 });
 
 const visitorSelect = `
-  SELECT v.*, r.first_name AS resident_first, r.last_name AS resident_last, rm.name AS room_name
+  SELECT v.*, r.first_name AS resident_first, r.last_name AS resident_last, rm.name AS room_name,
+    sc.payment_id AS sleepover_payment_id, sc.nights AS sleepover_nights,
+    sc.start_date AS sleepover_start_date, sc.end_date AS sleepover_end_date,
+    p.status AS sleepover_payment_status
   FROM visitors v
   LEFT JOIN residents r ON r.id = v.resident_id
   LEFT JOIN rooms rm ON rm.id = r.room_id
+  LEFT JOIN sleepover_charges sc ON sc.visitor_id = v.id
+  LEFT JOIN payments p ON p.id = sc.payment_id
 `;
 
 // List invites for the current user (resident sees only their own)

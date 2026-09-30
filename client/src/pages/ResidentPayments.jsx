@@ -20,7 +20,7 @@ export default function ResidentPayments({ user }) {
         <div>
           <div className="eyebrow">Resident portal</div>
           <h1 className="page-title">Payments</h1>
-          <p className="page-sub">View your invoices and settle your balance.</p>
+          <p className="page-sub">View invoices and guest sleepover charges. Staff confirm sleepover payments after collection.</p>
         </div>
       </div>
 
@@ -51,13 +51,14 @@ export default function ResidentPayments({ user }) {
                     <td className="dim">{p.type}</td>
                     <td className="mono">{fmtUGX(p.amount)}</td>
                     <td><Badge value={p.status} /></td>
-                    <td className="dim">{p.method ? p.method.replace('_', ' ') : '—'}</td>
+                    <td className="dim">{(p.sleepover_requested_method || p.method)?.replaceAll('_', ' ') || '—'}</td>
                     <td className="mono dim">{fmtDate(p.due_date)}</td>
                     <td className="mono dim">{fmtDate(p.paid_at)}</td>
                     <td>
-                      {(p.status === 'pending' || p.status === 'failed') && (
+                      {(p.status === 'pending' || p.status === 'failed') && !p.sleepover_visitor_id && (
                         <button className="btn btn-sm btn-primary" onClick={() => setPaying(p)}>Pay now</button>
                       )}
+                      {p.sleepover_visitor_id && p.status !== 'paid' && <span className="dim" style={{fontSize:12}}>Awaiting collection</span>}
                     </td>
                   </tr>
                 ))}

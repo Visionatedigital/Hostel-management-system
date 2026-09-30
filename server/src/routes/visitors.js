@@ -4,10 +4,13 @@ import db from '../db.js';
 const router = Router();
 
 const visitorSelect = `
-  SELECT v.*, r.first_name AS resident_first, r.last_name AS resident_last, rm.name AS room_name
+  SELECT v.*, r.first_name AS resident_first, r.last_name AS resident_last, rm.name AS room_name,
+    sc.nights AS sleepover_nights, p.status AS sleepover_payment_status
   FROM visitors v
   LEFT JOIN residents r ON r.id = v.resident_id
   LEFT JOIN rooms rm ON rm.id = v.room_id
+  LEFT JOIN sleepover_charges sc ON sc.visitor_id = v.id
+  LEFT JOIN payments p ON p.id = sc.payment_id
 `;
 
 router.get('/', (req, res) => {

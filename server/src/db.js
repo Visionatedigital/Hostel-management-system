@@ -97,6 +97,18 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS sleepover_charges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  visitor_id INTEGER NOT NULL UNIQUE REFERENCES visitors(id) ON DELETE RESTRICT,
+  payment_id INTEGER NOT NULL UNIQUE REFERENCES payments(id) ON DELETE RESTRICT,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  nights INTEGER NOT NULL CHECK (nights BETWEEN 1 AND 14),
+  nightly_rate INTEGER NOT NULL CHECK (nightly_rate > 0),
+  requested_method TEXT NOT NULL CHECK (requested_method IN ('mtn_momo','airtel_money','card','cash')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS maintenance_requests (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   resident_id INTEGER REFERENCES residents(id) ON DELETE SET NULL,
