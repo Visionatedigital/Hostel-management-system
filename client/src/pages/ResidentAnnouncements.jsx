@@ -27,11 +27,11 @@ export default function ResidentAnnouncements({ user }) {
           {items.map((a) => (
             <div className="card" key={a.id}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <Badge value={a.audience} label={a.audience === 'all' ? 'Everyone' : a.audience} />
+                <Badge value={a.audience} label={a.audience_label||(a.audience === 'all' ? 'Everyone' : a.audience)} />
                 <span className="mono dim" style={{ fontSize: 11 }}>{fmtDateTime(a.created_at)}</span>
               </div>
               <div className="section-title" style={{ marginBottom: 6 }}>{a.title}</div>
-              <div className="dim" style={{ fontSize: 14 }}>{a.body}</div>
+              <div className="dim" style={{ fontSize: 14,whiteSpace:'pre-wrap' }}>{a.body}</div>
             </div>
           ))}
         </div>

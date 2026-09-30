@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Brand from '../components/Brand.jsx';
 import { useParams } from 'react-router-dom';
 import { fmtDateTime } from '../components/ui.jsx';
 
@@ -60,7 +61,7 @@ export default function AcceptInvite() {
   if (accepted) {
     return (
       <Centered>
-        <div className="auth-card">
+        <div className="auth-card"><Brand className="invite-logo" />
           <div className="auth-brand">
             <div className="auth-mark">✓</div>
             <div>
@@ -82,10 +83,10 @@ export default function AcceptInvite() {
     <div className="auth-shell">
       <div className="auth-card" style={{ maxWidth: 520 }}>
         <div className="auth-brand">
-          <div className="auth-mark">V</div>
+          <Brand className="invite-logo" />
           <div>
             <div className="auth-title">You're invited</div>
-            <div className="auth-sub">Hostel visitor check-in</div>
+            <div className="auth-sub">New Nana Hostel visitor check-in</div>
           </div>
         </div>
 

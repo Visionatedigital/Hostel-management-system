@@ -3,6 +3,9 @@ import db from './db.js';
 
 function reset() {
   db.exec(`
+    DELETE FROM stay_receipts;
+    DELETE FROM stay_invoices;
+    DELETE FROM stays;
     DELETE FROM inspections;
     DELETE FROM announcements;
     DELETE FROM maintenance_requests;

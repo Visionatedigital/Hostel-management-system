@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './config.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
@@ -14,9 +14,13 @@ import visitorRoutes from './routes/visitors.js';
 import inviteRoutes from './routes/invites.js';
 import paymentRoutes from './routes/payments.js';
 import maintenanceRoutes from './routes/maintenance.js';
+import audienceRoutes from './routes/audiences.js';
 import announcementRoutes from './routes/announcements.js';
 import inspectionRoutes from './routes/inspections.js';
 import uploadRoutes from './routes/upload.js';
+import occupancyRoutes from './routes/occupancy.js';
+import reportRoutes from './routes/reports.js';
+import settingsRoutes from './routes/settings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -32,6 +36,9 @@ app.use('/uploads', express.static(uploadsDir));
 app.use('/api/auth', authRoutes);
 
 // Authenticated
+app.use('/api/occupancy', requireAuth, occupancyRoutes);
+app.use('/api/reports', requireAuth, reportRoutes);
+app.use('/api/settings', requireAuth, settingsRoutes);
 app.use('/api/rooms', requireAuth, roomRoutes);
 app.use('/api/residents', requireAuth, residentRoutes);
 app.use('/api/verify', requireAuth, verifyRoutes);
@@ -39,6 +46,7 @@ app.use('/api/visitors', requireAuth, visitorRoutes);
 app.use('/api/invites', inviteRoutes); // public view/accept, auth'd create
 app.use('/api/payments', requireAuth, paymentRoutes);
 app.use('/api/maintenance', requireAuth, maintenanceRoutes);
+app.use('/api/audiences', requireAuth, audienceRoutes);
 app.use('/api/announcements', requireAuth, announcementRoutes);
 app.use('/api/inspections', requireAuth, inspectionRoutes);
 app.use('/api/uploads', requireAuth, uploadRoutes);

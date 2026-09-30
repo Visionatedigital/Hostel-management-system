@@ -1,0 +1,62 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+import express from 'express';
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hostel-room-test-'));
+process.env.HOSTEL_DATA_DIR=temp;
+const {default:db}=await import('../src/db.js');
+const {default:rooms}=await import('../src/routes/rooms.js');
+const {default:occupancy}=await import('../src/routes/occupancy.js');
+const {default:maintenance}=await import('../src/routes/maintenance.js');
+const {default:inspections}=await import('../src/routes/inspections.js');
+const {requireAuth,signToken}=await import('../src/auth.js');
+const {today}=await import('../src/stay-math.js');
+const app=express();app.use(express.json());app.use(requireAuth);
+app.use('/rooms',rooms);app.use('/occupancy',occupancy);app.use('/maintenance',maintenance);app.use('/inspections',inspections);
+const server=app.listen(0,'127.0.0.1');
+await new Promise(resolve=>server.once('listening',resolve));
+async function request(url,body,role='admin',method) {
+  const res=await fetch(`http://127.0.0.1:${server.address().port}`+url,{method:method||(body?'POST':'GET'),headers:{'Content-Type':'application/json',Authorization:`Bearer ${signToken({id:1,username:'test',role})}`},body:body?JSON.stringify(body):undefined});
+  return {status:res.status,body:await res.json()};
+}
+test('room history retains records through tenant moves and supports room actions',async()=>{
+ try{
+  db.prepare("INSERT INTO rooms(id,name,capacity) VALUES(1,'Room 101',2),(2,'Room 202',2)").run();
+  db.prepare("INSERT INTO residents(id,first_name,last_name,room_id,status,move_in_date) VALUES(1,'Tenant','One',1,'active','2025-01-01')").run();
+  db.prepare("INSERT INTO visitors(resident_id,guest_name,ref,expected_arrival) VALUES(1,'Guest One','ROOM-TEST','2025-02-01')").run();
+  db.prepare("INSERT INTO payments(resident_id,amount,due_date) VALUES(1,100000,'2025-02-01')").run();
+  const repair=await request('/maintenance',{room_id:1,resident_id:1,description:'Leaking tap',category:'Plumbing',priority:'high',assigned_to:'Maintenance team'});
+  assert.equal(repair.status,201);
+  assert.equal((await request(`/maintenance/${repair.body.id}`,{status:'resolved'},'admin','PUT')).status,200);
+  assert.equal((await request('/inspections',{room_id:1,resident_id:1,inspection_date:today(),condition_notes:'Good condition',returned_keys:true,deductions_proposed:0})).status,201);
+  const date=today();
+  const stay=await request('/occupancy/stays',{resident_id:1,room_id:2,tenant_type:'ldc',billing_basis:'monthly',amount:850000,start_date:date,end_date:date});
+  assert.equal(stay.status,201);
+  const report=(await request('/occupancy')).body;
+  const invoice=report.stays.find(s=>s.id===stay.body.id).invoices[0];
+  assert.equal((await request('/occupancy/receipts',{invoice_id:invoice.id,amount:400000,paid_on:date,method:'cash'})).status,201);
+  db.prepare('UPDATE residents SET room_id=2 WHERE id=1').run();
+  const old=(await request('/rooms/1/history')).body;
+  assert.equal(old.occupants.length,0);
+  assert.equal(old.visits.length,1);
+  assert.equal(old.visits[0].room_attribution,'recorded');
+  assert.equal(old.legacy_payments.length,1);
+  assert.equal(old.repairs[0].status,'resolved');
+  assert.equal(old.summary.open_repairs,0);
+  assert.equal(old.inspections.length,1);
+  const current=(await request('/rooms/2/history')).body;
+  assert.equal(current.occupants.length,1);
+  assert.equal(current.visits.length,0,'moving tenant does not move old visitor history');
+  assert.equal(current.legacy_payments.length,0,'moving tenant does not move old manual payments');
+  assert.equal(current.receipts.length,1);
+  assert.equal(current.summary.due_balance,450000);
+  assert.equal(current.summary.cash_this_month,400000);
+  assert.ok(current.events.some(e=>e.type==='Rent receipt'));
+  assert.equal((await request('/rooms/1/history',undefined,'security')).status,403);
+  assert.equal((await request('/rooms/1/history',undefined,'resident')).status,403);
+  assert.equal((await request('/rooms/999/history')).status,404);
+  assert.equal((await request('/rooms/bad/history')).status,400);
+ }finally{await new Promise(resolve=>server.close(resolve));db.close();fs.rmSync(temp,{recursive:true,force:true});}
+});

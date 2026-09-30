@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Badge, Modal, Empty, fmtDateTime, useToast } from '../components/ui.jsx';
 
 export default function Visitors() {
+  const [params]=useSearchParams();
+  const roomFilter=Number(params.get('room'))||null;
   const [visitors, setVisitors] = useState([]);
   const [residents, setResidents] = useState([]);
   const [filter, setFilter] = useState('');
@@ -24,7 +27,7 @@ export default function Visitors() {
     } catch (e) { toast(e.message, 'error'); }
   }
 
-  const shown = filter ? visitors.filter((v) => v.status === filter) : visitors;
+  const shown = visitors.filter(v=>(!filter||v.status===filter)&&(!roomFilter||v.room_id===roomFilter));
 
   return (
     <div className="stagger">
@@ -37,6 +40,7 @@ export default function Visitors() {
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Register visitor</button>
       </div>
 
+      {roomFilter&&<div className="occupancy-notice">Visitors associated with this room · <Link to={`/rooms/${roomFilter}?tab=Visits`}>Back to room</Link> · <Link to="/visitors">Show all visitors</Link></div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         {['', 'invited', 'accepted', 'arrival_requested', 'approved', 'checked_in', 'overdue', 'checked_out', 'declined'].map((s) => (
           <button

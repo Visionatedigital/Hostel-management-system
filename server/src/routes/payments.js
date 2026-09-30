@@ -8,7 +8,7 @@ const paymentSelect = `
   SELECT p.*, r.first_name AS resident_first, r.last_name AS resident_last, rm.name AS room_name
   FROM payments p
   LEFT JOIN residents r ON r.id = p.resident_id
-  LEFT JOIN rooms rm ON rm.id = r.room_id
+  LEFT JOIN rooms rm ON rm.id = p.room_id
 `;
 
 function getResidentId(user) {

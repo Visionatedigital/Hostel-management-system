@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { Badge, Modal, Empty, fmtUGX, useToast } from '../components/ui.jsx';
 
@@ -31,11 +32,12 @@ export default function Payments() {
         <div>
           <div className="eyebrow">Finance · Rent administration</div>
           <h1 className="page-title">Payments</h1>
-          <p className="page-sub">Rent balances, confirmed payments and reconciliation.</p>
+          <p className="page-sub">Manual and legacy payments. Stay agreement rent is tracked on the Dashboard.</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Record payment</button>
       </div>
 
+      <Link className="occupancy-notice dashboard-unpriced" to="/">For tenancy invoices, partial receipts and monthly rent, open the Dashboard →</Link>
       <div className="stat-grid">
         <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 24 }}>{summary ? fmtUGX(summary.total_collected) : '—'}</div><div className="stat-label">Collected (paid)</div></div>
         <div className="stat-card"><div className="stat-value" style={{ fontSize: 24, color: 'var(--red)' }}>{summary ? fmtUGX(summary.total_outstanding) : '—'}</div><div className="stat-label">Outstanding</div></div>

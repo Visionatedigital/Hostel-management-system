@@ -7,7 +7,7 @@ const visitorSelect = `
   SELECT v.*, r.first_name AS resident_first, r.last_name AS resident_last, rm.name AS room_name
   FROM visitors v
   LEFT JOIN residents r ON r.id = v.resident_id
-  LEFT JOIN rooms rm ON rm.id = r.room_id
+  LEFT JOIN rooms rm ON rm.id = v.room_id
 `;
 
 router.get('/', (req, res) => {

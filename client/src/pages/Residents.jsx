@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
+import TenancyAgreement, { TenancyFields, defaultTenancy } from '../components/TenancyAgreement.jsx';
 import { Avatar, Badge, Modal, Empty, useToast } from '../components/ui.jsx';
 
 export default function Residents() {
+  const [params]=useSearchParams();
   const [residents, setResidents] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [query, setQuery] = useState('');
+  const [agreement,setAgreement]=useState(null);
+  const [query, setQuery] = useState(params.get('q')||'');
   const toast = useToast();
 
   function load() {
@@ -40,6 +44,7 @@ export default function Residents() {
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add resident</button>
       </div>
 
+      <Link className="occupancy-notice dashboard-unpriced" to="/">Add stay dates and rent terms for university, LDC and other tenants on the Dashboard →</Link>
       <div className="roster-search">
         <input
           className="input"
@@ -72,6 +77,7 @@ export default function Residents() {
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="btn btn-sm" onClick={() => setEditing(r)}>Edit</button>
+                        <button className="btn btn-sm" onClick={()=>setAgreement({resident:r})}>Agreement</button>
                         <button className="btn btn-sm btn-danger" onClick={() => remove(r)}>✕</button>
                       </div>
                     </td>
@@ -83,12 +89,13 @@ export default function Residents() {
         </div>
       )}
 
+      {agreement&&<TenancyAgreement resident={agreement.resident} created={agreement.created} onClose={()=>setAgreement(null)}/>}
       {(showAdd || editing) && (
         <ResidentForm
           resident={editing}
           rooms={rooms}
           onClose={() => { setShowAdd(false); setEditing(null); }}
-          onSaved={() => { setShowAdd(false); setEditing(null); load(); }}
+          onSaved={(saved) => { setShowAdd(false); setEditing(null); load(); if(!editing)setAgreement({resident:saved,created:true}); }}
         />
       )}
     </div>
@@ -110,6 +117,8 @@ function ResidentForm({ resident, rooms, onClose, onSaved }) {
     photo_path: resident?.photo_path || '',
   });
   const [uploading, setUploading] = useState(false);
+  const [busy,setBusy]=useState(false);
+  const [tenancy,setTenancy]=useState(defaultTenancy);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -129,43 +138,47 @@ function ResidentForm({ resident, rooms, onClose, onSaved }) {
 
   async function submit(e) {
     e.preventDefault();
+    if(busy||uploading)return;
+    setBusy(true);
     try {
-      if (resident) await api.put(`/residents/${resident.id}`, form);
-      else await api.post('/residents', form);
+      let saved;
+      if (resident) saved=await api.put(`/residents/${resident.id}`, form);
+      else saved=await api.post('/residents', {...form,tenancy});
       toast('Resident saved');
-      onSaved();
+      onSaved(saved);
     } catch (err) { toast(err.message, 'error'); }
+    finally{setBusy(false);}
   }
 
   return (
     <Modal title={resident ? 'Edit Resident' : 'Add Resident'} onClose={onClose}>
       <form onSubmit={submit}>
         <div className="form-row">
-          <div className="field"><label>First name *</label><input className="input" required value={form.first_name} onChange={(e) => set('first_name', e.target.value)} /></div>
-          <div className="field"><label>Last name *</label><input className="input" required value={form.last_name} onChange={(e) => set('last_name', e.target.value)} /></div>
+          <div className="field"><label htmlFor="resident-first_name">First name *</label><input className="input" maxLength="60" required id="resident-first_name" value={form.first_name} onChange={(e) => set('first_name', e.target.value)} /></div>
+          <div className="field"><label htmlFor="resident-last_name">Last name *</label><input className="input" maxLength="60" required id="resident-last_name" value={form.last_name} onChange={(e) => set('last_name', e.target.value)} /></div>
         </div>
         <div className="form-row">
-          <div className="field"><label>Phone</label><input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
-          <div className="field"><label>Email</label><input className="input" value={form.email} onChange={(e) => set('email', e.target.value)} /></div>
+          <div className="field"><label htmlFor="resident-phone">Phone</label><input className="input" id="resident-phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} /></div>
+          <div className="field"><label htmlFor="resident-email">Email</label><input className="input" id="resident-email" value={form.email} onChange={(e) => set('email', e.target.value)} /></div>
         </div>
         <div className="form-row">
-          <div className="field"><label>National ID</label><input className="input" value={form.national_id} onChange={(e) => set('national_id', e.target.value)} /></div>
-          <div className="field"><label>Room</label>
-            <select className="select" value={form.room_id} onChange={(e) => set('room_id', e.target.value)}>
+          <div className="field"><label htmlFor="resident-national_id">National ID</label><input className="input" id="resident-national_id" value={form.national_id} onChange={(e) => set('national_id', e.target.value)} /></div>
+          <div className="field"><label htmlFor="resident-room_id">Room</label>
+            <select id="resident-room_id" className="select" value={form.room_id} onChange={(e) => set('room_id', e.target.value)}>
               <option value="">— Unassigned —</option>
               {rooms.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.type})</option>)}
             </select>
           </div>
         </div>
         <div className="form-row">
-          <div className="field"><label>Status</label>
-            <select className="select" value={form.status} onChange={(e) => set('status', e.target.value)}>
+          <div className="field"><label htmlFor="resident-status">Status</label>
+            <select id="resident-status" className="select" value={form.status} onChange={(e) => set('status', e.target.value)}>
               <option value="active">Active</option>
               <option value="pending">Pending</option>
               <option value="departed">Departed</option>
             </select>
           </div>
-          <div className="field"><label>Move-in date</label><input className="input" type="date" value={form.move_in_date} onChange={(e) => set('move_in_date', e.target.value)} /></div>
+          <div className="field"><label htmlFor="resident-move_in_date">Move-in date</label><input className="input" type="date" id="resident-move_in_date" value={form.move_in_date} onChange={(e) => set('move_in_date', e.target.value)} /></div>
         </div>
 
         <div className="field">
@@ -182,7 +195,9 @@ function ResidentForm({ resident, rooms, onClose, onSaved }) {
           </div>
         </div>
 
-        <button className="btn btn-primary" style={{ width: '100%' }}>{resident ? 'Save changes' : 'Add resident'}</button>
+                {!resident&&<TenancyFields value={tenancy} onChange={setTenancy} startDate={form.move_in_date}/>}
+        {resident&&<p className="form-help">Existing agreement PDFs keep their saved details. Use Agreement to create a new version after editing.</p>}
+        <button className="btn btn-primary" disabled={busy||uploading} style={{ width: '100%' }}>{busy?(resident?'Saving…':'Adding resident & creating PDF…'):resident?'Save changes':'Add resident & create PDF'}</button>
       </form>
     </Modal>
   );

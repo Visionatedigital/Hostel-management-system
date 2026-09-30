@@ -1,27 +1,30 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { requireRole } from '../auth.js';
+import { roomHistory } from '../room-history.js';
+import { currentOccupants } from '../occupancy.js';
 
 const router = Router();
 
 // List rooms with occupant summary
 router.get('/', (req, res) => {
   const rooms = db.prepare('SELECT * FROM rooms ORDER BY name').all();
-  const occupancy = db.prepare(
-    `SELECT room_id, COUNT(*) AS occupant_count
-     FROM residents WHERE status = 'active' GROUP BY room_id`
-  ).all();
-  const occMap = Object.fromEntries(occupancy.map((o) => [o.room_id, o.occupant_count]));
-  const result = rooms.map((r) => ({ ...r, occupant_count: occMap[r.id] || 0 }));
+  const result = rooms.map(r => ({...r, occupant_count: currentOccupants(r.id).length}));
   res.json(result);
+});
+
+router.get('/:id/history', requireRole('admin'), (req,res) => {
+  const id=Number(req.params.id);
+  if (!Number.isSafeInteger(id)||id<1) return res.status(400).json({error:'Invalid room.'});
+  const history=roomHistory(id);
+  if (!history) return res.status(404).json({error:'Room not found.'});
+  res.json(history);
 });
 
 router.get('/:id', (req, res) => {
   const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(req.params.id);
   if (!room) return res.status(404).json({ error: 'Room not found' });
-  const occupants = db.prepare(
-    `SELECT id, first_name, last_name, phone, email, national_id, photo_path, status, move_in_date
-     FROM residents WHERE room_id = ? AND status = 'active' ORDER BY first_name`
-  ).all(room.id);
+  const occupants = currentOccupants(room.id);
   res.json({ ...room, occupants });
 });
 

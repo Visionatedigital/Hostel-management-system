@@ -1,0 +1,62 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+import express from 'express';
+import {PDFDocument} from 'pdf-lib';
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hostel-tenancy-test-'));
+process.env.HOSTEL_DATA_DIR=temp;
+const {default:db}=await import('../src/db.js');
+const {default:routes}=await import('../src/routes/residents.js');
+const {requireAuth,signToken}=await import('../src/auth.js');
+const {generateTenancyPdf,agreementSnapshot,agreementTerms}=await import('../src/documents/tenancy.js');
+const app=express();app.use(express.json());app.use('/residents',requireAuth,routes);
+app.use((e,req,res,next)=>res.status(500).json({error:e.message}));
+const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+async function request(url='',body,role='admin',method) {
+ const res=await fetch(`http://127.0.0.1:${server.address().port}/residents`+url,{method:method||(body?'POST':'GET'),headers:{Authorization:`Bearer ${signToken({id:1,username:'test',role})}`,...(body instanceof FormData?{}:{'Content-Type':'application/json'})},body:body instanceof FormData?body:body?JSON.stringify(body):undefined});
+ return {status:res.status,headers:res.headers,body:res.headers.get('content-type')?.includes('application/pdf')?Buffer.from(await res.arrayBuffer()):await res.json()};
+}
+test('resident creation generates a private printable agreement and preserves versions',async()=>{
+ try{
+  db.prepare("INSERT INTO rooms(id,name,capacity) VALUES(1,'Room 101',2),(2,'Room 202',2)").run();
+  const resident={first_name:'New',last_name:'Resident',room_id:1,move_in_date:'2026-09-01',phone:'+256 700000000',tenancy:{tenant_type:'bachelor',billing_basis:'fixed',end_date:'2026-11-30',rent_amount:1600000,deposit_amount:200000,special_terms:'Water included.'}};
+  assert.equal((await request('',resident,'security')).status,403);
+  const saved=await request('',resident);assert.equal(saved.status,201);
+  const id=saved.body.id,documentId=saved.body.agreement_id;
+  const metadata=await request(`/${id}/agreements`);assert.equal(metadata.body.documents.length,1);
+  const pdf=await request(`/${id}/agreements/${documentId}`);
+  assert.equal(pdf.status,200);assert.equal(pdf.body.subarray(0,5).toString(),'%PDF-');
+  assert.equal((await PDFDocument.load(pdf.body)).getPageCount(),3);
+  assert.equal(pdf.headers.get('cache-control'),'no-store');
+  assert.match(pdf.headers.get('content-disposition'),/attachment/);
+  assert.equal((await request(`/${id}/agreements/${documentId}`,undefined,'resident')).status,403);
+  assert.equal((await request(`/${id}/agreements`,undefined,'security')).status,403);
+  assert.equal((await request(`/999/agreements/${documentId}`)).status,404);
+  await request(`/${id}`,{room_id:2,first_name:'Updated'},'admin','PUT');
+  const original=JSON.parse(db.prepare('SELECT snapshot FROM tenancy_documents WHERE id=?').get(documentId).snapshot);
+  assert.equal(original.resident.first_name,'New');assert.equal(original.resident.room_name,'Room 101');
+  const revision=await request(`/${id}/agreements`,{...resident.tenancy,rent_amount:1800000});
+  assert.equal(revision.status,201);
+  assert.equal((await request(`/${id}/agreements`)).body.documents.length,2);
+  const revised=JSON.parse(db.prepare('SELECT snapshot FROM tenancy_documents WHERE id=?').get(revision.body.id).snapshot);
+  assert.equal(revised.resident.room_name,'Room 202');assert.equal(revised.terms.rent_amount,1800000);
+  const fd=new FormData();fd.append('agreement',new Blob([pdf.body],{type:'application/pdf'}),'signed.pdf');
+  assert.equal((await request(`/${id}/agreements/signed`,fd)).status,201);
+  const signed=(await request(`/${id}/agreements`)).body.documents.find(d=>d.kind==='signed');
+  assert.deepEqual((await request(`/${id}/agreements/${signed.id}`)).body,pdf.body);
+  const badFile=new FormData();badFile.append('agreement',new Blob(['not a pdf']),'fake.pdf');
+  assert.equal((await request(`/${id}/agreements/signed`,badFile)).status,400);
+  const count=db.prepare('SELECT COUNT(*) n FROM residents').get().n;
+  assert.equal((await request('',{...resident,tenancy:{end_date:'2026-08-01'}})).status,400);
+  assert.equal((await request('',{...resident,tenancy:{rent_amount:-1}})).status,400);
+  assert.equal((await request('',{...resident,first_name:'  '})).status,400);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM residents').get().n,count,'invalid terms do not create a partial resident');
+  const blank=await request('',{first_name:'Pending',last_name:'Terms'});
+  assert.equal(blank.status,201);
+  assert.equal(JSON.parse(db.prepare('SELECT snapshot FROM tenancy_documents WHERE id=?').get(blank.body.agreement_id).snapshot).terms.rent_amount,null);
+  const maxPdf=await generateTenancyPdf(agreementSnapshot({first_name:'Long name '.repeat(6),last_name:'Family '.repeat(8),email:'a'.repeat(120),phone:'1'.repeat(60),national_id:'X'.repeat(80),room_name:'Room '.repeat(24)},agreementTerms({special_terms:'Long additional agreed terms. '.repeat(25).slice(0,650),emergency_name:'Contact '.repeat(15),emergency_phone:'1'.repeat(60),payment_due:'Timing '.repeat(17)}),'NNH-LONG'));
+  assert.equal((await PDFDocument.load(maxPdf)).getPageCount(),3,'long valid details remain within three pages');
+ }finally{await new Promise(r=>server.close(r));db.close();fs.rmSync(temp,{recursive:true,force:true});}
+});

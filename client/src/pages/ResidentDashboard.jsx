@@ -62,7 +62,7 @@ export default function ResidentDashboard({ user }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'start' }}>
+      <div className="dashboard-columns resident-columns">
         <div className="card">
           <div className="section-title">Recent issues</div>
           {issues.length === 0 ? (
