@@ -23,25 +23,24 @@ access to earlier notices. Recipients see their notices in the app and notificat
 The formal rewrite expands rough notes into a complete management notice with an
 appropriate greeting, apology for disruptions, thanks and closing, without adding facts.
 
-### Africa's Talking announcement SMS
+### EgoSMS and guest gate codes
 
-Admins can choose **Send SMS** on a posted announcement, edit a shorter SMS version, choose up to five test numbers or the announcement audience, and review the exact recipient list before sending. Posting an announcement alone never sends SMS. Uganda local phone numbers are normalized to +256; international numbers are validated. Missing/invalid numbers are skipped and duplicate numbers receive one copy. Custom announcements use their original audience members, excluding departed residents/inactive staff; built-in audiences resolve current members.
+Residents must provide a valid guest phone number when creating an invitation. After the guest accepts with a selfie and ID photo, the server generates a unique six-digit access code, shows it on the acceptance page, and sends it to the guest through EgoSMS. Security enters that code in the visitor review screen; verification happens on the server, and approving the guest checks them in. Five incorrect attempts from the same address are allowed per visitor in a 15-minute window. SMS failure does not invalidate an accepted invitation because the on-screen code remains available through the private invitation link.
 
-Configure these in the private, Git-ignored `server/.env` (see `server/.env.example`):
+Admins can also choose **Send SMS** on a posted announcement, review recipients, and submit the message through the same EgoSMS integration. Uganda local phone numbers are normalized to +256; international numbers are validated. Missing, invalid, and duplicate numbers are handled before sending.
 
-- `AFRICASTALKING_ENVIRONMENT`: `sandbox` or `live` (defaults to sandbox).
-- `AFRICASTALKING_USERNAME`: exact API application username; `sandbox` for the simulator.
-- `AFRICASTALKING_API_KEY`: matching application key; server only, never a `VITE_` variable.
-- `AFRICASTALKING_SENDER_ID`: registered and approved sender ID/shortcode, or leave blank to use the provider default where supported.
+Configure these in the private, Git-ignored server/.env (see server/.env.example):
 
-Restart the backend after changing environment values. Live sends charge the provider account, which needs sufficient balance. Sandbox sends go to the simulator, not real phones. The integration uses the official SDK's compatible form-encoded `/version1/messaging` endpoint with `bulkSMSMode=1` and queueing.
+- EGOSMS_ENVIRONMENT: sandbox or live.
+- EGOSMS_USERNAME: API username from EgoSMS Settings > API Settings.
+- EGOSMS_PASSWORD: matching API password; server only.
+- EGOSMS_SENDER_ID: sender ID configured and approved in the EgoSMS account.
 
-Reviews expire after 30 minutes, hold the exact reviewed text/numbers, and are single-use even after a timeout or browser retry. A used review is never automatically resubmitted. Changing provider configuration requires a fresh review. Sending history stores each recipient's provider acceptance/rejection, message ID and returned cost. This version supports 500 unique numbers per send. GSM-7/Unicode segment counts are estimates; actual provider billing is authoritative.
+Sandbox requests use https://comms-test.pahappa.net/api/v1/json/; live requests use https://comms.egosms.co/api/v1/json/. Restart the backend after changing environment values. The Settings connection check uses EgoSMS's Balance method and sends no SMS.
 
-**Accepted is not delivered.** Final handset delivery reports currently live in the Africa's Talking dashboard. Automated delivery callbacks require a publicly reachable HTTPS endpoint; localhost cannot receive them. A timeout or interrupted backend may leave a send `unknown`/`submitting`: check the provider dashboard before creating another send, since it may already have been billed. No automatic retries are made.
+Announcement reviews expire after 30 minutes, freeze the reviewed text and numbers, and remain single-use after submission. EgoSMS acceptance is not handset delivery; use the provider dashboard and follow-up reference for final delivery status. No automatic retries are made after uncertain provider responses.
 
-Provider references: [official Node SDK](https://github.com/AfricasTalkingLtd/africastalking-node.js), [messaging status codes](https://help.africastalking.com/en/articles/16150386-messaging-error-codes), [SMS encoding and charges](https://help.africastalking.com/en/articles/2964644-making-your-sms-characters-count).
-
+Provider reference: [official EgoSMS/Pahappa Comms API documentation](https://developers.pahappa.com/docs/sending-sms/api-specs-and-usage/).
 ### Reports and settings
 
 The admin **Finance & Services → Reports** page provides month/room filters, monthly rent allocation, invoice amounts due in the selected month, actual dated receipts, and unpaid invoices due by the report date. Six-month trends, tenant-category totals, payment-method totals, invoice aging and room occupancy support reconciliation. Historical balances exclude receipts dated after the report date. Future periods are labelled scheduled/forecast values. Available-bed occupancy excludes rooms under maintenance. Manual/legacy payments, deposits and expenses remain separate; the reports are not profit statements.
@@ -50,4 +49,4 @@ Export the selected table (unpaid balances, receipts, rent allocation, or room o
 
 **Administration → Settings** saves hostel details and report contact/footer information in SQLite. New Dashboard stay forms use the saved tenant-category and rent-basis defaults; Dashboard receipts use the saved payment method. Existing financial records are unaffected. Semester duration (three months), full-calendar-month charging, UGX and Africa/Kampala remain the agreed fixed rules. Profile edits update only the signed-in admin's name/phone; they cannot change roles or credentials.
 
-Integration status exposes configuration flags and non-secret model/sender information. **Check SMS connection** makes a read-only Africa's Talking account request and never sends a message. Provider secrets remain in the private server environment; restart after changing them.
+Integration status exposes configuration flags and non-secret model/sender information. **Check SMS connection** queries the EgoSMS local wallet balance and never sends a message. Provider secrets remain in the private server environment; restart after changing them.

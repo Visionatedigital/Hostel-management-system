@@ -8,13 +8,13 @@ router.get('/',(_req,res)=>res.json(getSettings()));
 router.put('/',(req,res)=>{try{const value=validateSettings(req.body);db.prepare("INSERT INTO app_settings(id,value,updated_by) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=datetime('now')").run(JSON.stringify(value),req.user.id);res.json(getSettings());}catch(e){res.status(400).json({error:e.message});}});
 router.get('/integrations',(_req,res)=>res.json({sms:publicSmsConfig(),openai:{configured:!!process.env.OPENAI_API_KEY,model:process.env.OPENAI_REWRITE_MODEL||'gpt-4.1-mini'}}));
 router.post('/sms-check',async(_req,res)=>{
- const c=smsConfig();if(!c.configured)return res.json({verified:false,message:'Add matching SMS credentials in the private server configuration.'});
- const host=c.mode==='live'?'api.africastalking.com':'api.sandbox.africastalking.com';
+ const c=smsConfig();if(!c.configured)return res.json({verified:false,message:'Add matching EgoSMS credentials in the private server configuration.'});
+ const url=c.mode==='live'?'https://comms.egosms.co/api/v1/json/':'https://comms-test.pahappa.net/api/v1/json/';
  try{
-  const response=await fetch(`https://${host}/version1/user?`+new URLSearchParams({username:c.username}),{headers:{apikey:c.apiKey,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(15000)});
+  const response=await fetch(url,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},redirect:'error',body:JSON.stringify({method:'Balance',userdata:{username:c.username,password:c.password}}),signal:AbortSignal.timeout(15000)});
   const body=await response.json().catch(()=>null);
-  res.json({verified:response.ok&&!!body?.UserData,message:response.ok&&body?.UserData?'Account connection verified. No SMS sent.':response.status===401||response.status===403?'Authentication rejected. Verify the API username and matching application key. No SMS sent.':'Account check failed. Check your provider application. No SMS sent.'});
- }catch{res.json({verified:false,message:'Could not reach the provider. Try the check again. No SMS sent.'});}
+  res.json({verified:response.ok&&body?.Status==='OK',message:response.ok&&body?.Status==='OK'?'Account connection verified. Local balance: '+body.Balance+' credits. No SMS sent.':body?.Status==='Failed'?'Authentication or account check failed. Verify the EgoSMS API credentials. No SMS sent.':'Account check failed. Check your EgoSMS account. No SMS sent.'});
+ }catch{res.json({verified:false,message:'Could not reach EgoSMS. Try the check again. No SMS sent.'});}
 });
 router.put('/profile',(req,res)=>{
  const {full_name,phone=''}=req.body||{};

@@ -11,7 +11,7 @@ export default function AcceptInvite() {
   const [idPhoto, setIdPhoto] = useState(null);
   const [selfiePreview, setSelfiePreview] = useState(null);
   const [idPreview, setIdPreview] = useState(null);
-  const [accepted, setAccepted] = useState(false);
+  const [accepted, setAccepted] = useState(null);
   const [busy, setBusy] = useState(false);
   const selfieRef = useRef(null);
   const idRef = useRef(null);
@@ -42,7 +42,7 @@ export default function AcceptInvite() {
       const r = await fetch(`/api/invites/${token}/accept`, { method: 'POST', body: fd });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || 'Failed to accept invitation');
-      setAccepted(true);
+      setAccepted(data);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -58,7 +58,11 @@ export default function AcceptInvite() {
     return <Centered><div style={{ color: 'var(--text-dim)' }}>Loading invitation…</div></Centered>;
   }
 
-  if (accepted) {
+  const acceptedResult = accepted || (invite.status === 'accepted' && invite.access_code
+    ? { access_code: invite.access_code, sms_status: invite.sms_status }
+    : null);
+  if (acceptedResult) {
+    const smsSent = acceptedResult.sms_status === 'accepted';
     return (
       <Centered>
         <div className="auth-card"><Brand className="invite-logo" />
@@ -66,11 +70,17 @@ export default function AcceptInvite() {
             <div className="auth-mark">✓</div>
             <div>
               <div className="auth-title">Invitation accepted</div>
-              <div className="auth-sub">Your selfie and ID have been received.</div>
+              <div className="auth-sub">Use this code when you arrive at the gate.</div>
             </div>
           </div>
+          <div className="gate-code" aria-label={'Gate access code ' + acceptedResult.access_code}>
+            {acceptedResult.access_code}
+          </div>
           <p className="dim" style={{ fontSize: 14 }}>
-            When you arrive at the gate, tell security your name — your accepted invitation will appear in their system, and they'll verify your identity before you enter.
+            Show this code to security. Keep it private; it is linked to your accepted invitation.
+          </p>
+          <p className={smsSent ? 'form-help' : 'sms-notice'} role="status">
+            {smsSent ? 'The code was also sent to your phone by SMS.' : 'The SMS could not be confirmed. Save the code shown above.'}
           </p>
         </div>
       </Centered>

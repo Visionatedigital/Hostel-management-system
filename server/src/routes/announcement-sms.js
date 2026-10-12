@@ -41,7 +41,7 @@ router.post('/sms/send/:id',async(req,res)=>{
  if(Date.now()-Date.parse(row.created_at.replace(' ','T')+'Z')>30*60000)return res.status(409).json({error:'This review expired. Review recipients again.'});
  if(!row.announcement_id)return res.status(409).json({error:'This announcement was deleted. Create a new review.'});
  const c=smsConfig();
- if(!c.configured)return res.status(503).json({error:'Africa’s Talking is not configured. Add the server credentials first.'});
+ if(!c.configured)return res.status(503).json({error:'EgoSMS is not configured. Add the server credentials first.'});
  if(c.fingerprint!==row.config_fingerprint)return res.status(409).json({error:'SMS provider settings changed. Create a new review.'});
  db.prepare("UPDATE announcement_sms SET status='submitting',submitted_at=datetime('now') WHERE id=? AND status='draft'").run(row.id);
  try{

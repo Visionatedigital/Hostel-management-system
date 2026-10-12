@@ -1,8 +1,8 @@
 import {Router} from 'express';
 import {requireRole} from '../auth.js';
-import {rewriteAnnouncement,rewriteTones,RewriteError} from '../announcement-ai.js';
+import {rewriteAnnouncement,rewriteSms,rewriteTones,RewriteError} from '../announcement-ai.js';
 
-export function announcementRewriteRouter({rewrite=rewriteAnnouncement,now=Date.now}={}) {
+export function announcementRewriteRouter({rewrite=rewriteAnnouncement,rewriteMessage=rewriteSms,now=Date.now}={}) {
  const router=Router(),requests=new Map(),windowMs=5*60000;
  router.post('/rewrite',requireRole('admin'),async(req,res)=>{
   const {body,title='',audience='all',audience_name='',tone='professional'}=req.body||{};
@@ -17,6 +17,25 @@ export function announcementRewriteRouter({rewrite=rewriteAnnouncement,now=Date.
   const cancel=()=>{if(!res.writableEnded)controller.abort();};res.on('close',cancel);
   try{
    const rewritten=await rewrite({body:body.trim(),title:title.trim(),audience,audience_name,tone},{signal:controller.signal});
+   if(!controller.signal.aborted)res.json(rewritten);
+  }catch(error){
+   if(!controller.signal.aborted)res.status(error instanceof RewriteError?error.status:502).json({error:error instanceof RewriteError?error.message:'AI rewriting is temporarily unavailable. Your original text is safe.'});
+  }finally{res.off('close',cancel);}
+ });
+ router.post('/sms/rewrite',requireRole('admin'),async(req,res)=>{
+  const {message,title=''}=req.body||{};
+  if(typeof message!=='string'||!message.trim()||message.length>1600)return res.status(400).json({error:'Enter an SMS of 1 to 1,600 characters.'});
+  if(typeof title!=='string'||title.length>200)return res.status(400).json({error:'Invalid announcement title.'});
+  const time=now();
+  for(const [id,bucket] of requests)if(time>=bucket.resetAt)requests.delete(id);
+  const key=`sms:${req.user.id}`;
+  const bucket=requests.get(key)||{count:0,resetAt:time+windowMs};
+  if(bucket.count>=20){res.set('Retry-After',String(Math.ceil((bucket.resetAt-time)/1000)));return res.status(429).json({error:'You have used 20 SMS rewrites in five minutes. Please wait a moment before trying again.'});}
+  bucket.count++;requests.set(key,bucket);
+  const controller=new AbortController();
+  const cancel=()=>{if(!res.writableEnded)controller.abort();};res.on('close',cancel);
+  try{
+   const rewritten=await rewriteMessage({message:message.trim(),title:title.trim()},{signal:controller.signal});
    if(!controller.signal.aborted)res.json(rewritten);
   }catch(error){
    if(!controller.signal.aborted)res.status(error instanceof RewriteError?error.status:502).json({error:error instanceof RewriteError?error.message:'AI rewriting is temporarily unavailable. Your original text is safe.'});

@@ -31,7 +31,7 @@ export default function ResidentInvite({ user }) {
         <div>
           <div className="eyebrow">Resident portal</div>
           <h1 className="page-title">Invite a guest</h1>
-          <p className="page-sub">Send a secure invite — your guest accepts with a selfie and ID.</p>
+          <p className="page-sub">Send a secure invite — after acceptance, your guest receives a gate code by SMS.</p>
         </div>
         <button className="btn btn-primary" onClick={() => { setShowForm((s) => !s); setJustSent(null); }}>
           ✉ {showForm ? 'Close form' : 'New invitation'}
@@ -184,7 +184,7 @@ function InviteForm({ onCancel, onSent }) {
           <div className="field"><label>Guest email *</label><input className="input" required type="email" value={form.guest_email} onChange={(e) => set('guest_email', e.target.value)} placeholder="guest@email.com" /></div>
         </div>
         <div className="form-row">
-          <div className="field"><label>Guest phone</label><input className="input" value={form.guest_phone} onChange={(e) => set('guest_phone', e.target.value)} placeholder="+2567…" /></div>
+          <div className="field"><label>Guest phone *</label><input className="input" required type="tel" value={form.guest_phone} onChange={(e) => set('guest_phone', e.target.value)} placeholder="+2567…" /></div>
           <div className="field"><label>Purpose</label><input className="input" value={form.purpose} onChange={(e) => set('purpose', e.target.value)} placeholder="Visit, family, study…" /></div>
         </div>
         <div className="form-row">

@@ -75,6 +75,10 @@ CREATE TABLE IF NOT EXISTS visitors (
   selfie_path        TEXT,
   id_photo_path      TEXT,
   accepted_at        TEXT,
+  gate_code          TEXT,
+  gate_code_sms_status TEXT,
+  gate_code_sms_reference TEXT,
+  gate_code_sms_error TEXT,
   check_in_time      TEXT,
   check_out_time     TEXT,
   declined_reason    TEXT,
@@ -208,6 +212,14 @@ for (const table of ['visitors', 'payments']) {
 }
 
 db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)');
+const visitorColumns=db.prepare('PRAGMA table_info(visitors)').all();
+for(const [name,type] of [
+  ['gate_code','TEXT'],
+  ['gate_code_sms_status','TEXT'],
+  ['gate_code_sms_reference','TEXT'],
+  ['gate_code_sms_error','TEXT']
+])if(!visitorColumns.some(column=>column.name===name))db.exec('ALTER TABLE visitors ADD COLUMN '+name+' '+type);
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS visitors_gate_code ON visitors(gate_code) WHERE gate_code IS NOT NULL');
 if (!db.prepare('SELECT name FROM schema_migrations WHERE name=?').get('room_history_backfill_v1')) {
   db.transaction(()=>{
     for (const table of ['visitors','payments']) {

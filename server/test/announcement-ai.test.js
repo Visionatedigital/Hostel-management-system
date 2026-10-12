@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import {rewriteAnnouncement,RewriteError} from '../src/announcement-ai.js';
+import {rewriteAnnouncement,rewriteSms,RewriteError} from '../src/announcement-ai.js';
 import {announcementRewriteRouter} from '../src/routes/announcement-rewrite.js';
 import {requireAuth,signToken} from '../src/auth.js';
 const completed=body=>({ok:true,json:async()=>({status:'completed',output:[{type:'message',content:[{type:'output_text',text:body}]}]})});
@@ -40,5 +40,39 @@ test('rewrite endpoint requires admin, validates input and limits provider calls
   for(let i=1;i<20;i++)assert.equal((await request({body:'Draft'})).status,200);
   assert.equal((await request({body:'Draft'})).status,429);assert.equal(calls,20);
   time+=5*60000;assert.equal((await request({body:'Draft'})).status,200);
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});
+test('SMS rewrite asks for one short message and keeps the original on failure',async()=>{
+ let payload;
+ const result=await rewriteSms({title:'CLOSURE OF THE OFFICE FOR THE PUBLIC HOLIDAY',message:'CLOSURE OF THE OFFICE FOR THE PUBLIC HOLIDAY\n\nCLOSURE OF THE OFFICE FOR THE PUBLIC HOLIDAY\n\nNew Nana Hostel'},{apiKey:'unit-test-key',model:'test-model',fetchImpl:async(_url,options)=>{payload=JSON.parse(options.body);return completed('The office is closed for the public holiday.\n\nNew Nana Hostel');}});
+ assert.equal(payload.store,false);
+ assert.equal(payload.max_output_tokens,600);
+ assert.match(payload.instructions,/one SMS/);
+ assert.match(payload.instructions,/Remove repeated lines/);
+ assert.match(payload.instructions,/160 characters/);
+ assert.equal(JSON.parse(payload.input).title,'CLOSURE OF THE OFFICE FOR THE PUBLIC HOLIDAY');
+ assert.equal(result.message,'The office is closed for the public holiday.\n\nNew Nana Hostel');
+ await assert.rejects(rewriteSms({message:'x'.repeat(1601)},{apiKey:'test',fetchImpl:async()=>completed('x'.repeat(1601))}),/unusable/);
+});
+test('SMS rewrite endpoint is admin-only and does not share the announcement limit',async()=>{
+ let calls=0,time=1000;
+ const app=express();app.use(express.json());app.use('/announcements',requireAuth,announcementRewriteRouter({now:()=>time,rewrite:async()=>({body:'Notice'}),rewriteMessage:async(input)=>{calls++;return {message:'SMS: '+input.message.trim()};}}));
+ const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
+ async function request(path,body,role='admin'){
+  const res=await fetch(`http://127.0.0.1:${server.address().port}${path}`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${signToken({id:7,username:'admin',role})}`},body:JSON.stringify(body)});
+  return {status:res.status,body:await res.json()};
+ }
+ try{
+  assert.equal((await request('/announcements/sms/rewrite',{message:'Holiday'},'security')).status,403);
+  assert.equal((await request('/announcements/sms/rewrite',{message:''})).status,400);
+  assert.equal((await request('/announcements/sms/rewrite',{message:'a'.repeat(1601)})).status,400);
+  assert.equal(calls,0);
+  const rewritten=await request('/announcements/sms/rewrite',{message:'  Holiday closed  ',title:'Holiday'});
+  assert.equal(rewritten.status,200);assert.equal(rewritten.body.message,'SMS: Holiday closed');
+  for(let i=1;i<20;i++)assert.equal((await request('/announcements/rewrite',{body:'Draft'})).status,200);
+  assert.equal((await request('/announcements/sms/rewrite',{message:'Still allowed'})).status,200);
+  for(let i=2;i<20;i++)assert.equal((await request('/announcements/sms/rewrite',{message:'Again'})).status,200);
+  assert.equal((await request('/announcements/sms/rewrite',{message:'Too many'})).status,429);
+  time+=5*60000;assert.equal((await request('/announcements/sms/rewrite',{message:'Later'})).status,200);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });

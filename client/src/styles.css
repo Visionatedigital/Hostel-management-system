@@ -1199,7 +1199,6 @@ textarea {
 .occupancy-stats { grid-template-columns: repeat(4, minmax(0,1fr)); }
 .metric-note { font-size: 10px; color: var(--text-dim); margin-top: 8px; }
 .occupancy-notice { display: block; padding: 16px 18px; border: 1px solid #bcd7f4; border-left: 4px solid #0b64b7; background: #edf5ff; border-radius: 10px; font-size: 13px; color: #315778; margin-bottom: 20px; }
-.unpriced-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .occupancy-explainer { display: flex; align-items: flex-start; gap: 12px; padding: 18px; border-radius: 12px; background: #fff3e7; border: 1px solid #f3d6b7; margin-bottom: 26px; color: #735334; }
 .occupancy-explainer p { font-size: 13px; }
 .occupancy-explainer svg { flex-shrink: 0; margin-top: 2px; }
@@ -1433,3 +1432,13 @@ textarea {
   .sidebar:has(.sidebar-brand-compact){padding-top:76px}
   .app-shell-scrolled .topbar{top:52px}
 }
+
+.gate-code{margin:20px 0 12px;padding:18px;border:1px solid var(--border-strong);background:var(--bg-2);border-radius:8px;text-align:center;font-size:36px;font-weight:700;letter-spacing:8px;font-variant-numeric:tabular-nums}
+.gate-code-input{text-align:center;font-size:24px;font-weight:700;letter-spacing:8px;font-variant-numeric:tabular-nums}
+@media(max-width:480px){.gate-code{font-size:30px;letter-spacing:5px}.gate-code-input{letter-spacing:5px}}
+.gate-lookup{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,420px);align-items:end;gap:18px;margin-bottom:20px}
+.gate-lookup .section-title{margin-bottom:2px}
+.gate-lookup-controls{display:flex;gap:10px;align-items:center}
+.gate-lookup-controls .gate-code-input{min-width:0}
+.gate-lookup-error{grid-column:1/-1;margin:0}
+@media(max-width:700px){.gate-lookup{grid-template-columns:1fr}.gate-lookup-controls{align-items:stretch;flex-direction:column}}

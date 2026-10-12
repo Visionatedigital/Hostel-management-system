@@ -11,6 +11,9 @@ export default function Visitors() {
   const [filter, setFilter] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [reviewing, setReviewing] = useState(null);
+  const [gateCode, setGateCode] = useState('');
+  const [gateBusy, setGateBusy] = useState(false);
+  const [gateError, setGateError] = useState('');
   const toast = useToast();
 
   function load() {
@@ -18,13 +21,28 @@ export default function Visitors() {
   }
   useEffect(() => { load(); api.get('/residents').then(setResidents).catch(() => {}); }, []);
 
-  async function setStatus(v, status) {
+  async function setStatus(v, status, extra = {}) {
     try {
-      await api.put(`/visitors/${v.id}`, { status });
+      await api.put(`/visitors/${v.id}`, { status, ...extra });
       toast(`Visitor ${status.replace(/_/g, ' ')}`);
       load();
       setReviewing(null);
     } catch (e) { toast(e.message, 'error'); }
+  }
+
+  async function findGuest(event) {
+    event.preventDefault();
+    setGateBusy(true);
+    setGateError('');
+    try {
+      const visitor = await api.post('/visitors/verify-code', { code: gateCode });
+      setReviewing(visitor);
+      setGateCode('');
+    } catch (error) {
+      setGateError(error.message);
+    } finally {
+      setGateBusy(false);
+    }
   }
 
   const shown = visitors.filter(v=>(!filter||v.status===filter)&&(!roomFilter||v.room_id===roomFilter));
@@ -39,6 +57,24 @@ export default function Visitors() {
         </div>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Register visitor</button>
       </div>
+
+      <form className="card gate-lookup" onSubmit={findGuest}>
+        <div>
+          <div className="eyebrow">Guest arrival</div>
+          <h2 className="section-title">Enter access code</h2>
+          <p className="form-help">Ask the visitor for the six-digit code sent after they accepted the invitation.</p>
+        </div>
+        <div className="gate-lookup-controls">
+          <input className="input gate-code-input" inputMode="numeric" autoComplete="one-time-code"
+            aria-label="Guest access code" pattern="[0-9]{6}" maxLength="6" required value={gateCode}
+            onChange={event => setGateCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="000000" />
+          <button className="btn btn-primary" disabled={gateBusy || gateCode.length !== 6}>
+            {gateBusy ? 'Checking…' : 'Find guest'}
+          </button>
+        </div>
+        {gateError && <p className="announcement-ai-error gate-lookup-error" role="alert">{gateError}</p>}
+      </form>
 
       {roomFilter&&<div className="occupancy-notice">Visitors associated with this room · <Link to={`/rooms/${roomFilter}?tab=Visits`}>Back to room</Link> · <Link to="/visitors">Show all visitors</Link></div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -74,9 +110,6 @@ export default function Visitors() {
                     <td className="mono dim">{fmtDateTime(v.check_in_time)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {v.status === 'accepted' && (
-                          <button className="btn btn-sm btn-primary" onClick={() => setReviewing(v)}>Review &amp; approve</button>
-                        )}
                         {v.status === 'approved' && (
                           <button className="btn btn-sm btn-primary" onClick={() => setStatus(v, 'checked_in')}>Check in</button>
                         )}
@@ -103,7 +136,7 @@ export default function Visitors() {
         <ReviewVisitor
           visitor={reviewing}
           onClose={() => setReviewing(null)}
-          onApprove={() => setStatus(reviewing, 'approved')}
+          onApprove={() => setStatus(reviewing, 'checked_in', { verification_token: reviewing.verification_token })}
           onDecline={() => setStatus(reviewing, 'declined')}
         />
       )}
@@ -121,49 +154,26 @@ export default function Visitors() {
 
 function ReviewVisitor({ visitor, onClose, onApprove, onDecline }) {
   return (
-    <Modal title="Identity Review" onClose={onClose}>
+    <Modal title="Review guest details" onClose={onClose}>
+      <div className="sms-notice" role="status"><strong>Access code verified</strong><p>The guest is at the gate. Approving checks them in.</p></div>
       <div className="verify-facts">
-        <div className="fact-row">
-          <span className="fact-label">Guest</span>
-          <span className="fact-value">{visitor.guest_name}</span>
-        </div>
-        <div className="fact-row">
-          <span className="fact-label">Host</span>
-          <span className="fact-value">{visitor.resident_first} {visitor.resident_last} · {visitor.room_name || '—'}</span>
-        </div>
-        <div className="fact-row">
-          <span className="fact-label">Expected</span>
-          <span className="fact-value mono">{fmtDateTime(visitor.expected_arrival)}</span>
-        </div>
-        <div className="fact-row">
-          <span className="fact-label">Status</span>
-          <span className="fact-value"><Badge value={visitor.status} /></span>
-        </div>
+        <div className="fact-row"><span className="fact-label">Guest</span><span className="fact-value">{visitor.guest_name}</span></div>
+        <div className="fact-row"><span className="fact-label">Host</span><span className="fact-value">{visitor.resident_first} {visitor.resident_last} · {visitor.room_name || '—'}</span></div>
+        <div className="fact-row"><span className="fact-label">Purpose</span><span className="fact-value">{visitor.purpose || '—'}</span></div>
+        <div className="fact-row"><span className="fact-label">Expected arrival</span><span className="fact-value mono">{fmtDateTime(visitor.expected_arrival)}</span></div>
+        <div className="fact-row"><span className="fact-label">Expected departure</span><span className="fact-value mono">{fmtDateTime(visitor.expected_departure)}</span></div>
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
-        <div>
-          <div className="fact-label" style={{ marginBottom: 6 }}>Selfie</div>
-          <div className="verify-photo" style={{ maxWidth: '100%' }}>
-            {visitor.selfie_path ? <img src={visitor.selfie_path} alt="Selfie" /> : <span style={{ fontSize: 30 }}>—</span>}
-          </div>
-        </div>
-        <div>
-          <div className="fact-label" style={{ marginBottom: 6 }}>ID photo</div>
-          <div className="verify-photo" style={{ maxWidth: '100%' }}>
-            {visitor.id_photo_path ? <img src={visitor.id_photo_path} alt="ID" /> : <span style={{ fontSize: 30 }}>—</span>}
-          </div>
-        </div>
+        <div><div className="fact-label" style={{ marginBottom: 6 }}>Selfie</div><div className="verify-photo" style={{ maxWidth: '100%' }}>{visitor.selfie_path ? <img src={visitor.selfie_path} alt="Selfie" /> : <span style={{ fontSize: 30 }}>—</span>}</div></div>
+        <div><div className="fact-label" style={{ marginBottom: 6 }}>ID photo</div><div className="verify-photo" style={{ maxWidth: '100%' }}>{visitor.id_photo_path ? <img src={visitor.id_photo_path} alt="ID" /> : <span style={{ fontSize: 30 }}>—</span>}</div></div>
       </div>
-
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn btn-primary" style={{ flex: 1 }} onClick={onApprove}>✓ Identity verified — approve</button>
+        <button className="btn btn-primary" style={{ flex: 1 }} onClick={onApprove}>Approve and check in</button>
         <button className="btn btn-danger" onClick={onDecline}>Decline</button>
       </div>
     </Modal>
   );
 }
-
 function AddVisitor({ residents, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({ guest_name: '', guest_phone: '', id_number: '', purpose: '', resident_id: '', expected_arrival: '', expected_departure: '' });

@@ -2,12 +2,12 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import { createHash } from 'node:crypto';
 
 export function smsConfig() {
- const mode=process.env.AFRICASTALKING_ENVIRONMENT||'sandbox';
- const username=(process.env.AFRICASTALKING_USERNAME||'').trim();
- const apiKey=(process.env.AFRICASTALKING_API_KEY||'').trim();
- const sender=(process.env.AFRICASTALKING_SENDER_ID||'').trim();
- const valid=['sandbox','live'].includes(mode)&&(mode==='sandbox'?username==='sandbox':username&&username!=='sandbox');
- return {mode,username,apiKey,sender,configured:!!(valid&&apiKey),fingerprint:createHash('sha256').update(JSON.stringify([mode,username,apiKey,sender])).digest('hex')};
+ const mode=process.env.EGOSMS_ENVIRONMENT||'sandbox';
+ const username=(process.env.EGOSMS_USERNAME||'').trim();
+ const password=(process.env.EGOSMS_PASSWORD||'').trim();
+ const sender=(process.env.EGOSMS_SENDER_ID||'EgoSMS').trim();
+ const valid=['sandbox','live'].includes(mode)&&username&&password&&sender;
+ return {mode,username,password,sender,configured:!!valid,fingerprint:createHash('sha256').update(JSON.stringify([mode,username,password,sender])).digest('hex')};
 }
 export function publicSmsConfig(){const c=smsConfig();return {mode:c.mode,sender:c.sender||'Provider default',configured:c.configured};}
 export function normalizePhone(value){
@@ -28,27 +28,20 @@ export function smsSegments(message){
 }
 export class SmsError extends Error{constructor(message,uncertain=false){super(message);this.uncertain=uncertain;}}
 export async function sendSms({message,numbers,config=smsConfig(),fetchImpl=fetch}){
- if(!config.configured)throw new SmsError('Africa’s Talking is not configured. Add the server credentials first.');
- const form=new URLSearchParams({username:config.username,to:numbers.join(','),message,bulkSMSMode:'1',enqueue:'1'});
- if(config.sender)form.set('from',config.sender);
- const url=config.mode==='live'?'https://api.africastalking.com/version1/messaging':'https://api.sandbox.africastalking.com/version1/messaging';
+ if(!config.configured)throw new SmsError('EgoSMS is not configured. Add the server credentials first.');
+ if(!Array.isArray(numbers)||!numbers.length||numbers.length>1000)throw new SmsError('Choose between 1 and 1,000 SMS recipients.');
+ const body={method:'SendSms',userdata:{username:config.username,password:config.password},msgdata:numbers.map(number=>({number:number.replace(/^\+/,''),message,senderid:config.sender,priority:1}))};
+ const url=config.mode==='live'?'https://comms.egosms.co/api/v1/json/':'https://comms-test.pahappa.net/api/v1/json/';
  let response;
- try{response=await fetchImpl(url,{method:'POST',redirect:'error',headers:{apikey:config.apiKey,Accept:'application/json','Content-Type':'application/x-www-form-urlencoded'},body:form,signal:AbortSignal.timeout(25000)});}
- catch{throw new SmsError('The provider response was not received. Check Africa’s Talking before sending again; these messages may already have been accepted.',true);}
+ try{response=await fetchImpl(url,{method:'POST',redirect:'error',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});}
+ catch{throw new SmsError('The provider response was not received. Check EgoSMS before sending again; these messages may already have been accepted.',true);}
  if(!response.ok){
   if(response.status>=500)throw new SmsError('The provider returned an error. Check its dashboard before sending again.',true);
-  throw new SmsError(response.status===401||response.status===403?'Provider rejected authentication. Check the application username and API key.':'Provider rejected this request. Check your sender ID, balance and application settings.');
+  throw new SmsError(response.status===401||response.status===403?'Provider rejected authentication. Check the EgoSMS API username and password.':'Provider rejected this request. Check your sender ID, balance and account settings.');
  }
  let payload;try{payload=await response.json();}catch{throw new SmsError('Provider returned an unreadable response. Check its dashboard before sending again.',true);}
- const entries=payload?.SMSMessageData?.Recipients;
- if(!Array.isArray(entries))throw new SmsError('Provider did not return recipient results. Check its dashboard before sending again.',true);
- return numbers.map(number=>{
-  const r=entries.find(e=>normalizePhone(e.number)===number);
-  const code=Number(r?.statusCode);
-  const accepted=[100,101,102].includes(code);
-  const reasons={401:'Provider risk hold',402:'Invalid or unapproved sender ID',403:'Invalid phone number',404:'Unsupported number type',405:'Insufficient provider balance',406:'Recipient blacklisted or opted out',407:'Could not route',500:'Provider internal error',501:'Gateway error',502:'Rejected by gateway'};
-  return {number,status:!r||!Number.isFinite(code)?'unknown':accepted?'accepted':'rejected',reason:reasons[code]||null,provider_code:Number.isFinite(code)?code:null,
-   message_id:typeof r?.messageId==='string'&&/^[\w.-]{1,200}$/.test(r.messageId)?r.messageId:null,
-   cost:typeof r?.cost==='string'&&/^[A-Z]{3} \d+(\.\d+)?$/.test(r.cost)?r.cost:null};
- });
+ if(payload?.Status==='Failed')throw new SmsError(typeof payload.Message==='string'&&payload.Message.length<=300?payload.Message:'EgoSMS rejected the request. Check credentials, sender ID and balance.');
+ if(payload?.Status!=='OK')throw new SmsError('Provider returned an unknown response. Check its dashboard before sending again.',true);
+ const reference=typeof payload.MsgFollowUpUniqueCode==='string'&&/^[\w.-]{1,200}$/.test(payload.MsgFollowUpUniqueCode)?payload.MsgFollowUpUniqueCode:null;
+ return numbers.map(number=>({number,status:'accepted',reason:null,provider_code:null,message_id:reference,cost:null}));
 }
